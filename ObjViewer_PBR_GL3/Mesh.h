@@ -22,9 +22,13 @@ struct Mesh
 	Material* materials;
 	uint32_t materialCount;
 
-	void Destroy();
+	void Terminate(FbxManager* m_fbxManager, FbxScene* m_scene);
+	static void LoadFBX(FbxManager* m_fbxManager, FbxScene* m_scene, const char* filepath, Mesh* obj);
+	static void ProcessNode(FbxNode* node, FbxNode* parent, Mesh* obj);
 
-	static bool ParseObj(Mesh* obj, const char* filepath);
+	void DestroyMesh();
+
+	static bool ParseObj(Mesh* obj, const char* filepath, FbxNode* node, FbxNode* parent);
 };
 
 

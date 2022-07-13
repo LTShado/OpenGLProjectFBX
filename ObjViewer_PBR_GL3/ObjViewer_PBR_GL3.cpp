@@ -35,18 +35,18 @@
 #include <iostream>
 #include <fstream>
 
-FbxManager* m_fbxManager;
-FbxScene* m_scene;
-
 #include "../common/GLShader.h"
 #include "mat4.h"
 #include "Texture.h"
 #include "Mesh.h"
 #include "FrameBuffer.h"
 
+FbxManager* m_fbxManager;
+FbxScene* m_scene;
+
 std::vector<glm::vec3> positions[1];
 std::vector<bool> normals[1];
-int* verts;
+std::vector<int*> verts[1];
 
 GLuint FBXVAO;	// la structure d'attributs stockee en VRAM
 GLuint FBXVBO;	// les vertices de l'objet stockees en VRAM
@@ -64,16 +64,15 @@ void AddMesh(FbxNode* node, FbxNode* parent)
 
 	FbxMesh* mesh = node->GetMesh();
 
-	verts = mesh->GetPolygonVertices();
-
 	int nbVertex = 0;
 	int nbPoly = 0;
 	nbPoly = mesh->GetPolygonCount();
 	nbVertex = mesh->GetPolygonVertexCount();
 	normals->resize(nbVertex);
 	positions->resize(nbVertex);
+	verts->resize(nbVertex * nbPoly);
 
-	for (int i = 0; i < nbPoly; i++) {
+	/*for (int i = 0; i < nbPoly; i++) {
 		int p = mesh->GetPolygonSize(i);
 		for (int j = 0; j < p; j++) {
 			FbxVector4 position = mesh->GetControlPointAt(mesh->GetPolygonVertex(i, j));
@@ -83,58 +82,11 @@ void AddMesh(FbxNode* node, FbxNode* parent)
 			normals->push_back(mesh->GetPolygonVertexNormal(i, j, normal));
 
 		}
-	}
-
-}
-
-void Terminate()
-{
-	m_scene->Destroy();
-	m_fbxManager->Destroy();
-}
-
-void LoadFBX() {
-	m_scene = FbxScene::Create(m_fbxManager, "Ma Scene");
-	FbxImporter* importer = FbxImporter::Create(m_fbxManager, "");
-	bool status = importer->Initialize("../data/ironman/ironman.fbx", -1, m_fbxManager->GetIOSettings());
-	status = importer->Import(m_scene);
-	importer->Destroy();
-}
-
-void ProcessNode(FbxNode* node, FbxNode* parent) {
-	//
-	// insérer TRAITEMENT DU NODE, cf plus bas
-	//
-
-	FbxNodeAttribute* att = node->GetNodeAttribute();
-
-	if (att != NULL)
-	{
-		FbxNodeAttribute::EType type = att->GetAttributeType();
-		switch (type)
-		{
-		case FbxNodeAttribute::eMesh:
-			AddMesh(node, parent);
-			break;
-
-		case FbxNodeAttribute::eSkeleton:
-			// illustratif, nous traiterons du cas des squelettes 
-			// dans une fonction spécifique
-			//AddJoint(node, parent);
-			break;
-			//…
+		for (int k = 0; k < nbVertex; k++) {
+			verts->push_back(mesh->GetPolygonVertices());
 		}
-	}
+	}*/
 
-
-
-
-	int childCount = node->GetChildCount();
-	for (int i = 0; i < childCount; i++)
-	{
-		FbxNode* child = node->GetChild(i);
-		ProcessNode(child, node);
-	}
 }
 
 struct Application
@@ -165,12 +117,6 @@ struct Application
 		FbxIOSettings* ioSettings = FbxIOSettings::Create(m_fbxManager, IOSROOT);
 		m_fbxManager->SetIOSettings(ioSettings);
 
-		LoadFBX();
-
-		FbxNode* root_node = m_scene->GetRootNode();
-
-		ProcessNode(root_node, NULL);
-
 		std::cout << "Version : " << glGetString(GL_VERSION) << std::endl;
 		std::cout << "Vendor : " << glGetString(GL_VENDOR) << std::endl;
 		std::cout << "Renderer : " << glGetString(GL_RENDERER) << std::endl;
@@ -188,8 +134,9 @@ struct Application
 
 		object = new Mesh;
 
-		//Mesh::ParseObj(object, "../data/ironman/ironman.fbx");
-		Mesh::ParseObj(object, "../data/lightning/lightning_obj.obj");
+		Mesh::LoadFBX(m_fbxManager, m_scene, "../data/ironman/ironman.fbx", object);
+		
+		//Mesh::ParseObj(object, "../data/lightning/lightning_obj.obj");
 		//Mesh::ParseObj(object, "../data/suzanne.obj");
 
 		int32_t program = opaqueShader.GetProgram();
@@ -233,7 +180,7 @@ struct Application
 		// des donnees qui lui sont rattachees (VBO), c'est pour cette raison qu'il nous
 		// faut ici creer plusieurs fois un VAO aux proprietes similaires
 		//
-		/*for (uint32_t i = 0; i < object->meshCount; i++)
+		for (uint32_t i = 0; i < object->meshCount; i++)
 		{
 			SubMesh& mesh = object->meshes[i];
 
@@ -260,31 +207,7 @@ struct Application
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 			//DeleteBufferObject(mesh.VBO);
 			//DeleteBufferObject(mesh.IBO);
-		}*/
-
-		glGenVertexArrays(1, &FBXVAO);
-		glBindVertexArray(FBXVAO);
-
-		glGenBuffers(1, &FBXVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, FBXVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions	, GL_STATIC_DRAW);
-
-		glGenBuffers(1, &FBXIBO);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, FBXIBO);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-
-		glVertexAttribPointer(positionLocation, 3, GL_FLOAT, false, sizeof(Vertex), 0);
-		glVertexAttribPointer(normalLocation, 3, GL_FLOAT, false, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-		glVertexAttribPointer(texcoordsLocation, 2, GL_FLOAT, false, sizeof(Vertex), (void*)offsetof(Vertex, texcoords));
-		// indique que les donnees sont sous forme de tableau
-		glEnableVertexAttribArray(positionLocation);
-		glEnableVertexAttribArray(normalLocation);
-		glEnableVertexAttribArray(texcoordsLocation);
-		 
-		glBindVertexArray(0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+		}
 
 		// force TOUS les framebuffers a effectuer une conversion automatique lineaire -> sRGB en ecriture
 		glEnable(GL_FRAMEBUFFER_SRGB);
@@ -304,7 +227,8 @@ struct Application
 		glDeleteBuffers(1, &MaterialUBO);
 		glDeleteBuffers(1, &MatricesUBO);
 
-		object->Destroy();
+		object->DestroyMesh();
+		object->Terminate(m_fbxManager,m_scene);
 		delete object;
 
 		// On n'oublie pas de détruire les objets OpenGL
@@ -400,6 +324,7 @@ struct Application
 
 			// bind implicitement les VBO et IBO rattaches, ainsi que les definitions d'attributs
 			glBindVertexArray(submesh.VAO);
+			//glBindVertexArray(FBXVAO);
 			// dessine les triangles
 
 			if (submesh.indicesCount)

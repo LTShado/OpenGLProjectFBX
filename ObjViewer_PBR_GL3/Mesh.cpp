@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "tiny_obj_loader.h"
+#include <fbxsdk.h>
 
 #include "OpenGLcore.h"
 #include "Material.h"
@@ -11,7 +12,63 @@
 // materiau par defaut (couleur ambiante, couleur diffuse, couleur speculaire, shininess, tex ambient, tex diffuse, tex specular)
 Material Material::defaultMaterial = { { 0.f, 0.f, 0.f }, 0.f, { 1.f, 1.f, 1.f }, 0.f, { 0.f, 0.f, 0.f }, 256.f, 0, 1, 0 };
 
-void Mesh::Destroy()
+void Mesh::Terminate(FbxManager* m_fbxManager,FbxScene* m_scene)
+{
+	m_scene->Destroy();
+	m_fbxManager->Destroy();
+}
+
+void Mesh::LoadFBX(FbxManager* m_fbxManager, FbxScene* m_scene, const char* filepath, Mesh* obj) {
+
+	m_scene = FbxScene::Create(m_fbxManager, "Ma Scene");
+	FbxImporter* importer = FbxImporter::Create(m_fbxManager, "");
+	bool status = importer->Initialize(filepath, -1, m_fbxManager->GetIOSettings());
+	status = importer->Import(m_scene);
+	importer->Destroy();
+
+	FbxNode* root_node = m_scene->GetRootNode();
+
+	ProcessNode(root_node, NULL, obj);
+}
+
+void Mesh::ProcessNode(FbxNode* node, FbxNode* parent, Mesh* obj) {
+	//
+	// insérer TRAITEMENT DU NODE, cf plus bas
+	//
+
+	FbxNodeAttribute* att = node->GetNodeAttribute();
+
+	if (att != NULL)
+	{
+		FbxNodeAttribute::EType type = att->GetAttributeType();
+		switch (type)
+		{
+		case FbxNodeAttribute::eMesh:
+			Mesh::ParseObj(obj, "../data/lightning/lightning_obj.obj", node, parent);
+			//AddMesh(node, parent);
+			break;
+
+		case FbxNodeAttribute::eSkeleton:
+			// illustratif, nous traiterons du cas des squelettes 
+			// dans une fonction spécifique
+			//AddJoint(node, parent);
+			break;
+			//…
+		}
+	}
+
+
+
+
+	int childCount = node->GetChildCount();
+	for (int i = 0; i < childCount; i++)
+	{
+		FbxNode* child = node->GetChild(i);
+		ProcessNode(child, node, obj);
+	}
+}
+
+void Mesh::DestroyMesh()
 {
 	// On n'oublie pas de détruire les objets OpenGL
 	for (uint32_t i = 0; i < meshCount; i++)
@@ -29,7 +86,7 @@ void Mesh::Destroy()
 	delete[] meshes;
 }
 
-bool Mesh::ParseObj(Mesh* obj, const char* filepath)
+bool Mesh::ParseObj(Mesh* obj, const char* filepath, FbxNode* node, FbxNode* parent)
 {
 	std::string warning, error;
 
